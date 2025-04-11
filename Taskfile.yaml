@@ -1,0 +1,74 @@
+version: '3'
+
+vars:
+  APKO_ARCHS:
+    ref: |
+      dict "amd64" "x86_64" "aarch64"
+  APKO_ARCH:
+    ref: |
+      coalesce (get .APKO_ARCHS ARCH) ARCH
+  APKO_CONTAINER_REGISTRY: local.registry
+  SOURCE_DATE_EPOCH:
+    sh: git log -1 --format=%ct
+
+tasks:
+  default:
+    desc: "Default task — runs the full build process for container and packages."
+    deps: [build]
+
+  build:
+    desc: "Build everything: APK packages using Melange and container image using Apko."
+    deps: [build-apko]
+
+  build-apko:
+    desc: "Build a container image with PHP 8.3 and the custom Perforce extension using Apko."
+    deps: [build-melange@php-8.3-perforce]
+    cmds:
+      - mkdir -p containers/php-perforce
+      - |
+        export SOURCE_DATE_EPOCH={{ q .SOURCE_DATE_EPOCH }}
+        apko build \
+          --arch {{ q .APKO_ARCH }} \
+          --keyring-append containers/melange.rsa.pub \
+          --repository-append '@local containers/packages' \
+          containers/apko.yaml \
+          {{ q .APKO_CONTAINER_REGISTRY }}/php/perforce:latest \
+          containers/php-perforce/image.tar
+
+  build-melange@*:
+    desc: "Build the custom Melange package '{{ index .MATCH 0 }}' for architecture {{ .APKO_ARCH }}."
+    vars:
+      PACKAGE: '{{ index .MATCH 0 }}'
+      TMPDIR:
+        sh: mkdir -p .cache/melange/{{ .PACKAGE }}-{{ .APKO_ARCH }} && mktemp -d -p .cache/melange/{{ .PACKAGE }}-{{ .APKO_ARCH }}
+    deps:
+      - generate-melange-rsakey
+    sources:
+      - containers/melange/{{ .PACKAGE }}.yaml
+      - containers/melange/{{ .PACKAGE }}/**/*
+    generates:
+      - containers/packages/{{ .APKO_ARCH }}/{{ .PACKAGE }}-*.apk
+    cmds:
+      - defer: rm -rf {{ q .TMPDIR }}
+      - |
+        export SOURCE_DATE_EPOCH={{ q .SOURCE_DATE_EPOCH }} TMPDIR={{ q .TMPDIR }}
+        melange build \
+          --arch {{ q .APKO_ARCH }} \
+          --namespace perforce-hcc \
+          --signing-key containers/melange.rsa \
+          --keyring-append containers/melange.rsa.pub \
+          --repository-append '@local containers/packages' \
+          --out-dir containers/packages \
+          containers/melange/{{ .PACKAGE }}.yaml
+
+  generate-melange-rsakey:
+    desc: "Generate a public/private RSA key pair for signing local Melange packages."
+    run: once
+    cmds:
+      - melange keygen containers/melange.rsa
+    generates:
+      - containers/melange.rsa
+      - containers/melange.rsa.pub
+    status:
+      - test -f containers/melange.rsa
+      - test -f containers/melange.rsa.pub

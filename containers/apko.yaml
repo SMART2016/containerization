@@ -1,0 +1,25 @@
+contents:
+  keyring:
+  - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+  repositories:
+  - https://packages.wolfi.dev/os
+  packages:
+  - busybox
+  - nginx-stable
+  - s6
+  - wget
+  - zip
+  - php-8.3
+  - php-8.3-fpm
+  # php-8.3-xhprof@local
+  - php-8.3-perforce@local
+  #- swarm@local
+  #- swarm-config-nginx@local
+  #- swarm-custom@local
+archs:
+- aarch64
+- x86_64
+entrypoint:
+  command: php
+  args:
+    - -m

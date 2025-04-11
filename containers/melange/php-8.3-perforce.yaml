@@ -1,0 +1,52 @@
+package:
+  name: php-8.3-perforce
+  version: 2024.1.2601561
+  epoch: 0
+  target-architecture:
+  - aarch64
+  - x86_64
+  description:
+  copyright:
+  - license: BSD-3-Clause
+  dependencies:
+    runtime:
+    - libssl3
+    - ${{package.name}}-config
+    - php-8.3
+    provides:
+    - php-perforce=${{package.full-version}}
+environment:
+  contents:
+    keyring:
+    - https://packages.wolfi.dev/os/wolfi-signing.rsa.pub
+    repositories:
+    - https://packages.wolfi.dev/os
+    packages:
+    - wolfi-baselayout
+    - autoconf
+    - build-base
+    - busybox
+    - file
+    - p4api-dev@local
+    - php-8.3
+    - php-8.3-dev
+pipeline:
+- uses: fetch
+  with:
+    uri: https://streleasesoecna.blob.core.windows.net/p4-mirror/r24.1/p4-bin/bin.tools/p4php-${{package.version}}.tgz
+    expected-sha256: 0dc3e0d8aeda7340103c45616641236e7103c105cebc336880bf91e572ebf217
+- runs: |
+    phpize
+- runs: |
+    ./configure --with-perforce=/opt/perforce/p4api --enable-openssl-dynamic
+- runs: |
+    INSTALL_ROOT=${{targets.destdir}} DESTDIR=${{targets.destdir}} make install
+subpackages:
+- name: ${{package.name}}-config
+  dependencies:
+    provides:
+    - php-perforce-config=${{package.full-version}}
+  pipeline:
+  - runs: |
+      mkdir -p ${{targets.subpkgdir}}/etc/php/conf.d
+      echo "extension=perforce.so" >${{targets.subpkgdir}}/etc/php/conf.d/perforce.ini
